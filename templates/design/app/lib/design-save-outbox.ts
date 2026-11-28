@@ -233,8 +233,9 @@ export function reconcileRejectedRestoreClaimOutboxEntryResult(
   if (reconciliation.operations.length === 0) return { kind: "empty" };
 
   const payload = { ...entry.payload };
+  const rejectedClaimSet = new Set(rejectedClaims);
   const remainingClaims = claims.filter(
-    (claim) => !rejectedClaims.includes(claim),
+    (claim) => !rejectedClaimSet.has(claim),
   );
   if (remainingClaims.length === 0) delete payload.restoreClaims;
   else payload.restoreClaims = remainingClaims;

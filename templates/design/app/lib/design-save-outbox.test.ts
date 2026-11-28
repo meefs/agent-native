@@ -1372,3 +1372,43 @@ describe("which queued saves are stuck", () => {
     ).toEqual([]);
   });
 });
+
+describe("reconcileRejectedRestoreClaimOutboxEntryResult at board scale", () => {
+  it("reconciles a dense board's claims without scanning the rejected list per claim", () => {
+    const count = 3000;
+    const claims = Array.from({ length: count }, (_, i) => ({
+      targetFileId: `screen-${i}`,
+    }));
+    const dataOperations = claims.map((claim, i) => ({
+      op: "set",
+      path: ["screenMetadata", claim.targetFileId, "connectionId"],
+      value: `connection-${i}`,
+    }));
+    const entry = {
+      payload: { restoreClaims: claims, dataOperations },
+      updatedAt: 1,
+    } as unknown as Parameters<
+      typeof reconcileRejectedRestoreClaimOutboxEntryResult
+    >[0];
+    const rejected = claims.slice(0, count / 2).map((c) => c.targetFileId);
+
+    const includes = vi.spyOn(Array.prototype, "includes");
+    let result: ReturnType<
+      typeof reconcileRejectedRestoreClaimOutboxEntryResult
+    >;
+    let largestScan = 0;
+    try {
+      result = reconcileRejectedRestoreClaimOutboxEntryResult(entry, rejected);
+      for (const ctx of includes.mock.contexts) {
+        largestScan = Math.max(largestScan, (ctx as unknown[]).length);
+      }
+    } finally {
+      includes.mockRestore();
+    }
+
+    expect(largestScan).toBeLessThan(100);
+    expect(result).toMatchObject({ kind: "updated" });
+    if (result?.kind !== "updated") throw new Error("expected an update");
+    expect(result.entry.payload.restoreClaims).toEqual(claims.slice(count / 2));
+  });
+});
