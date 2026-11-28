@@ -784,3 +784,40 @@ describe("runPublishAgentSelectionContext geometry coalescing", () => {
     }
   });
 });
+
+describe("runPublishAgentSelectionContext inspector drag write budget", () => {
+  const dragElement = (width: number): ElementInfo =>
+    ({
+      tagName: "div",
+      sourceId: "node-1",
+      selector: '[data-agent-native-node-id="node-1"]',
+      classes: [`w-[${width}px]`],
+      computedStyles: { width: `${width}px` },
+      boundingRect: { x: 0, y: 0, width, height: 10 },
+      isFlexChild: false,
+      isFlexContainer: false,
+    }) as ElementInfo;
+
+  afterEach(() => vi.useRealTimers());
+
+  it("collapses a 60-tick class-writing drag into one trailing write", () => {
+    vi.useFakeTimers();
+    vi.mocked(setClientAppState).mockClear();
+    const base = argsFor({ selectedElement: dragElement(0) });
+    runPublishAgentSelectionContext(base);
+    vi.advanceTimersByTime(1_000);
+    const baseline = vi.mocked(setClientAppState).mock.calls.length;
+    for (let width = 1; width <= 60; width++) {
+      runPublishAgentSelectionContext({
+        ...base,
+        selectedElement: dragElement(width),
+      });
+      vi.advanceTimersByTime(16);
+    }
+    vi.advanceTimersByTime(1_000);
+    const writes = vi.mocked(setClientAppState).mock.calls.length - baseline;
+    expect(writes).toBeLessThanOrEqual(2);
+    const last = writtenSelection().selectedElement as { classes: string[] };
+    expect(last.classes).toEqual(["w-[60px]"]);
+  });
+});

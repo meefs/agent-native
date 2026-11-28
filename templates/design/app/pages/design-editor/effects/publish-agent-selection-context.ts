@@ -437,6 +437,8 @@ export function runPublishAgentSelectionContext({
           const {
             boundingRect: _boundingRect,
             computedStyles: _computedStyles,
+            classes: _classes,
+            classCount: _classCount,
             ...stableSelectedElement
           } = persistedContextBase.selectedElement;
           return stableSelectedElement;
