@@ -7,10 +7,12 @@ const database = vi.hoisted(() => ({
     visibility: string;
   } | null,
 }));
+const failure = vi.hoisted(() => ({ error: null as Error | null }));
 const where = vi.hoisted(() =>
   vi.fn((conditions: Array<{ column: string; value: unknown }>) => ({
-    limit: async () =>
-      conditions.some(
+    limit: async () => {
+      if (failure.error) throw failure.error;
+      return conditions.some(
         (condition) =>
           condition.column === "design_visibility" &&
           condition.value === "public" &&
@@ -22,7 +24,8 @@ const where = vi.hoisted(() =>
               description: database.row!.description,
             },
           ]
-        : [],
+        : [];
+    },
   })),
 );
 
@@ -56,7 +59,26 @@ import { designResourceMeta } from "./public-design-meta";
 describe("public Design metadata", () => {
   beforeEach(() => {
     database.row = null;
+    failure.error = null;
     where.mockClear();
+  });
+
+  it("degrades to default metadata when the lookup fails instead of throwing into the route boundary", async () => {
+    failure.error = new Error("connection timeout");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const loaderData = await loadPublicDesignMeta(
+      "design-1",
+      "https://design.example.test/design/design-1",
+    );
+
+    expect(loaderData.resource).toBeNull();
+    expect(loaderData.origin).toBe("https://design.example.test");
+    expect(warn).toHaveBeenCalledWith(
+      "[design] public metadata lookup failed",
+      failure.error,
+    );
+    warn.mockRestore();
   });
 
   it("loads and renders metadata for public designs", async () => {

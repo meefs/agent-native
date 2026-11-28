@@ -16,9 +16,11 @@ export async function loadPublicDesignMeta(
   id: string | undefined,
   requestUrl: string,
 ): Promise<PublicDesignMetaData> {
-  // guard:allow-unscoped — this anonymous metadata loader returns rows only when the requested design is explicitly public.
-  const [resource] = id
-    ? await getDb()
+  let resource: PublicDesignMetaData["resource"] = null;
+  if (id) {
+    try {
+      // guard:allow-unscoped — this anonymous metadata loader returns rows only when the requested design is explicitly public.
+      [resource = null] = await getDb()
         .select({
           title: schema.designs.title,
           description: schema.designs.description,
@@ -30,11 +32,14 @@ export async function loadPublicDesignMeta(
             eq(schema.designs.visibility, "public"),
           ),
         )
-        .limit(1)
-    : [];
+        .limit(1);
+    } catch (error) {
+      console.warn("[design] public metadata lookup failed", error);
+    }
+  }
 
   return {
-    resource: resource ?? null,
+    resource,
     origin: new URL(requestUrl).origin,
     basePath: getConfiguredAppBasePath(),
   };

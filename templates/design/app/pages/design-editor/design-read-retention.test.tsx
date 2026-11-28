@@ -251,6 +251,41 @@ describe("useRetainedDesignRead", () => {
     expect(retryRead).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the design through an idle refocus while the session is still resolving, then re-reads", async () => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "hidden",
+    });
+    await render({ read: design, accessCheckedAt: 5 });
+    await render({ read: "Request timed out", accessCheckedAt: 5 });
+    expect(latest.state).toBe("retained");
+    retryRead.mockClear();
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(retryRead).not.toHaveBeenCalled();
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible",
+    });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(retryRead).toHaveBeenCalledTimes(1);
+
+    await render({
+      read: "Request timed out",
+      accessStatus: { hasAccess: false, signedIn: false },
+      accessCheckedAt: 9,
+    });
+    expect(latest).toEqual({ state: "retained", metadata: design });
+
+    const refreshed: Metadata = { id: "design-1", files: [{ id: "screen" }] };
+    await render({ read: refreshed, accessCheckedAt: 9 });
+    expect(latest.state).toBe("live");
+  });
+
   it("closes the design when access is really gone, and keeps it closed", async () => {
     await render({ read: design, accessCheckedAt: 5 });
     await render({
