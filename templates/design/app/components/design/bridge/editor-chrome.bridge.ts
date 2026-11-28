@@ -9420,10 +9420,11 @@ declare var __INITIAL_SOURCE_OWNERSHIP__: string;
     });
 
     var liveNodes = new Map<string, Element[]>();
+    var templateSiblingsByParent = new WeakMap<Element, Element[]>();
     function collectLiveSourceElements(root: Node): void {
       if (root.nodeType !== 1) return;
       var element = root as Element;
-      if (isTemplateCloneElement(element)) return;
+      if (isTemplateCloneElement(element, templateSiblingsByParent)) return;
       var nodeId = element.getAttribute("data-agent-native-node-id");
       if (nodeId) {
         var matches = liveNodes.get(nodeId);
@@ -9456,7 +9457,7 @@ declare var __INITIAL_SOURCE_OWNERSHIP__: string;
       var element = matches[0]!;
       if (
         !isSourceOwned(element) ||
-        isTemplateCloneElement(element) ||
+        isTemplateCloneElement(element, templateSiblingsByParent) ||
         element.tagName.toLowerCase() !== entry.tagName
       ) {
         return;

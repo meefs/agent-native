@@ -8140,10 +8140,11 @@ export const editorChromeBridgeScript: string = `"use strict";
         }
       });
       var liveNodes = /* @__PURE__ */ new Map();
+      var templateSiblingsByParent = /* @__PURE__ */ new WeakMap();
       function collectLiveSourceElements(root) {
         if (root.nodeType !== 1) return;
         var element = root;
-        if (isTemplateCloneElement(element)) return;
+        if (isTemplateCloneElement(element, templateSiblingsByParent)) return;
         var nodeId = element.getAttribute("data-agent-native-node-id");
         if (nodeId) {
           var matches = liveNodes.get(nodeId);
@@ -8169,7 +8170,7 @@ export const editorChromeBridgeScript: string = `"use strict";
         var matches = liveNodes.get(nodeId);
         if (!matches || matches.length !== 1) return;
         var element = matches[0];
-        if (!isSourceOwned(element) || isTemplateCloneElement(element) || element.tagName.toLowerCase() !== entry.tagName) {
+        if (!isSourceOwned(element) || isTemplateCloneElement(element, templateSiblingsByParent) || element.tagName.toLowerCase() !== entry.tagName) {
           return;
         }
         element.__anSourceMeta = copySourceMeta(entry.meta);
