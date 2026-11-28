@@ -26348,6 +26348,25 @@ declare var __INITIAL_SOURCE_OWNERSHIP__: string;
       positionOverlay(selectionOverlay, selectedEl);
       postElementSelect(selectedEl);
     }
+    var pendingMoveEvent: MouseEvent | PointerEvent | null = null;
+    var pendingMoveFrame = 0;
+    function onMoveCoalesced(ev: MouseEvent | PointerEvent): void {
+      pendingMoveEvent = ev;
+      if (pendingMoveFrame) return;
+      pendingMoveFrame = window.requestAnimationFrame(function () {
+        pendingMoveFrame = 0;
+        flushPendingMove();
+      });
+    }
+    function flushPendingMove(): void {
+      if (pendingMoveFrame) {
+        window.cancelAnimationFrame(pendingMoveFrame);
+        pendingMoveFrame = 0;
+      }
+      var pending = pendingMoveEvent;
+      pendingMoveEvent = null;
+      if (pending) onMove(pending);
+    }
     function onMove(ev, isRelease) {
       lastMoveClient = { x: ev.clientX, y: ev.clientY };
       var controllerMove = bridgeMoveController.pointerMove(
@@ -26530,7 +26549,10 @@ declare var __INITIAL_SOURCE_OWNERSHIP__: string;
       restoreOverflowOnAncestors(liftedClippingAncestors);
     }
     function detachMoveDrag() {
-      document.removeEventListener(events.move, onMove, true);
+      pendingMoveEvent = null;
+      if (pendingMoveFrame) window.cancelAnimationFrame(pendingMoveFrame);
+      pendingMoveFrame = 0;
+      document.removeEventListener(events.move, onMoveCoalesced, true);
       document.removeEventListener(events.up, onUp, true);
       document.removeEventListener("keydown", onMoveKeyDown, true);
       clearActiveDragCancel(cancelMoveDrag);
@@ -26579,6 +26601,7 @@ declare var __INITIAL_SOURCE_OWNERSHIP__: string;
       cancelMoveDrag();
     }
     function onUp(ev) {
+      flushPendingMove();
       // Replay only a release point no move applied: replaying the same point
       // re-snaps against drop targets resolved since and shifts the layer.
       if (ev.clientX !== lastMoveClient.x || ev.clientY !== lastMoveClient.y) {
@@ -26805,7 +26828,7 @@ declare var __INITIAL_SOURCE_OWNERSHIP__: string;
         if (!isGroupDrag) postCrossScreenDrag("cancel");
       }
     }
-    document.addEventListener(events.move, onMove, true);
+    document.addEventListener(events.move, onMoveCoalesced, true);
     document.addEventListener(events.up, onUp, true);
     document.addEventListener("keydown", onMoveKeyDown, true);
     setActiveDragCancel(cancelMoveDrag, gestureStartedAt);

@@ -20720,6 +20720,25 @@ export const editorChromeBridgeScript: string = `"use strict";
         positionOverlay(selectionOverlay, selectedEl);
         postElementSelect(selectedEl);
       }
+      var pendingMoveEvent = null;
+      var pendingMoveFrame = 0;
+      function onMoveCoalesced(ev) {
+        pendingMoveEvent = ev;
+        if (pendingMoveFrame) return;
+        pendingMoveFrame = window.requestAnimationFrame(function() {
+          pendingMoveFrame = 0;
+          flushPendingMove();
+        });
+      }
+      function flushPendingMove() {
+        if (pendingMoveFrame) {
+          window.cancelAnimationFrame(pendingMoveFrame);
+          pendingMoveFrame = 0;
+        }
+        var pending = pendingMoveEvent;
+        pendingMoveEvent = null;
+        if (pending) onMove(pending);
+      }
       function onMove(ev, isRelease) {
         lastMoveClient = { x: ev.clientX, y: ev.clientY };
         var controllerMove = bridgeMoveController.pointerMove(
@@ -20851,7 +20870,10 @@ export const editorChromeBridgeScript: string = `"use strict";
         restoreOverflowOnAncestors(liftedClippingAncestors);
       }
       function detachMoveDrag() {
-        document.removeEventListener(events.move, onMove, true);
+        pendingMoveEvent = null;
+        if (pendingMoveFrame) window.cancelAnimationFrame(pendingMoveFrame);
+        pendingMoveFrame = 0;
+        document.removeEventListener(events.move, onMoveCoalesced, true);
         document.removeEventListener(events.up, onUp, true);
         document.removeEventListener("keydown", onMoveKeyDown, true);
         clearActiveDragCancel(cancelMoveDrag);
@@ -20898,6 +20920,7 @@ export const editorChromeBridgeScript: string = `"use strict";
         cancelMoveDrag();
       }
       function onUp(ev) {
+        flushPendingMove();
         if (ev.clientX !== lastMoveClient.x || ev.clientY !== lastMoveClient.y) {
           onMove(ev, true);
         }
@@ -21109,7 +21132,7 @@ export const editorChromeBridgeScript: string = `"use strict";
           if (!isGroupDrag) postCrossScreenDrag("cancel");
         }
       }
-      document.addEventListener(events.move, onMove, true);
+      document.addEventListener(events.move, onMoveCoalesced, true);
       document.addEventListener(events.up, onUp, true);
       document.addEventListener("keydown", onMoveKeyDown, true);
       setActiveDragCancel(cancelMoveDrag, gestureStartedAt);
